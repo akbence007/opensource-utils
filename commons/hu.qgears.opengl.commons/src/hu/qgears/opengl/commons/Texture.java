@@ -25,12 +25,11 @@ import org.lwjgl.opengl.GLContext;
 import org.lwjgl.util.vector.Vector3f;
 import org.lwjgl.util.vector.Vector4f;
 
-
 /**
  * An OpenGL texture that can be rendered on OpenGL context.
  * 
- * Can contain pixel data of ENativeImageComponentOrder types.
- * The image can be rendered as a sprite.
+ * Can contain pixel data of ENativeImageComponentOrder types. The image can be
+ * rendered as a sprite.
  * 
  * All methods must be called on OpenGL context thread.
  *
@@ -38,12 +37,14 @@ import org.lwjgl.util.vector.Vector4f;
  *
  */
 public class Texture implements IDisposeable {
-	
+
 	private static final Logger LOG = Logger.getLogger(Texture.class);
-	
+
+	static public boolean pbo = false;
+
 	private boolean samplingNear;
 	private int textureHandle;
-	private EBlendFunc blendFunc=EBlendFunc.off;
+	private EBlendFunc blendFunc = EBlendFunc.off;
 	private boolean disposed = false;
 	private int width, height;
 	public NativeImage sourceImage;
@@ -52,7 +53,7 @@ public class Texture implements IDisposeable {
 	/**
 	 * Use for debug purpose only: number of allocated texture objects.
 	 */
-	public static int numberOfTextures=0;
+	public static int numberOfTextures = 0;
 
 	public EBlendFunc getBlendFunc() {
 		return blendFunc;
@@ -74,8 +75,7 @@ public class Texture implements IDisposeable {
 		return height;
 	}
 
-	public SizeInt getSize()
-	{
+	public SizeInt getSize() {
 		return new SizeInt(width, height);
 	}
 
@@ -99,19 +99,22 @@ public class Texture implements IDisposeable {
 	public static Texture create(NativeImage image) {
 		return create(image, EMipMapType.none);
 	}
+
 	public static Texture create(NativeImage rdtc, EMipMapType mtype) {
 		return create(rdtc, mtype, ETextureWrapType.mirroredRepeat, false);
 	}
-	public static Texture create(NativeImage rdtc, EMipMapType mtype, ETextureWrapType wrapType, boolean appleClientStorage) {
+
+	public static Texture create(NativeImage rdtc, EMipMapType mtype, ETextureWrapType wrapType,
+			boolean appleClientStorage) {
 		int maxSize = UtilGl.getMaxTextureSize();
 		int w = rdtc.getWidth();
 		int h = rdtc.getHeight();
 		if (w > maxSize || h > maxSize) {
 			return null;
 		}
-		int handle=allocateTexture();
+		int handle = allocateTexture();
 		if (handle > 0) {
-			Texture ret=new Texture(handle, w, h, GL11.GL_RGBA8, 0);
+			Texture ret = new Texture(handle, w, h, GL11.GL_RGBA8, 0);
 			ret.replaceContent(rdtc, mtype, wrapType, appleClientStorage);
 			return ret;
 		}
@@ -121,12 +124,12 @@ public class Texture implements IDisposeable {
 	public static Texture create(SizeInt size) {
 		return create(size.getWidth(), size.getHeight());
 	}
+
 	public static Texture create(int w, int h) {
 		ByteBuffer pixels = UtilGl.allocBytes(w * h * 4);
-		NativeImage image=new NativeImage(
-				new DefaultJavaNativeMemory(
-		pixels), new SizeInt(w, h), ENativeImageComponentOrder.RGBA, 4);
-		int handle=makeTexture(image);
+		NativeImage image = new NativeImage(new DefaultJavaNativeMemory(pixels), new SizeInt(w, h),
+				ENativeImageComponentOrder.RGBA, 4);
+		int handle = makeTexture(image);
 		if (handle > 0) {
 			return new Texture(handle, w, h, GL11.GL_RGBA8, 0);
 		}
@@ -136,7 +139,7 @@ public class Texture implements IDisposeable {
 	@Override
 	public void dispose() {
 		if (!disposed) {
-			IntBuffer textureHandle=UtilGl.wrapTemp(this.textureHandle);
+			IntBuffer textureHandle = UtilGl.wrapTemp(this.textureHandle);
 			textureHandle.flip();
 			GL11.glDeleteTextures(textureHandle);
 			numberOfTextures--;
@@ -159,27 +162,39 @@ public class Texture implements IDisposeable {
 		// 'select' the new texture by it's handle
 		GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureHandle);
 		// set texture parameters
-		GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S,
-				GL11.GL_REPEAT);
-		GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T,
-				GL11.GL_REPEAT);
-		GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER,
-				GL11.GL_LINEAR); 
-		GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER,
-				GL11.GL_LINEAR);
+		GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL11.GL_REPEAT);
+		GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL11.GL_REPEAT);
+		GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
+		GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
 		int openGLtype = getOpenGLType(componentOrder);
-		GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, // level of detail
-				GL11.GL_RGBA8, // internal format for texture is RGB with
-				// Alpha
-				// GL13.GL_COMPRESSED_RGBA, // internal format for texture
-				// is compressed RGB with Alpha
-				w, h, // size of texture image
-				0, // no border
-				openGLtype, // incoming pixel format: 4 bytes in RGBA
-				// order
-				GL11.GL_UNSIGNED_BYTE, // incoming pixel data type: unsigned
-				// bytes
-				pixels); // incoming pixels
+
+		if (pbo)
+			GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, // level of detail
+					GL11.GL_RGBA8, // internal format for texture is RGB with
+					// Alpha
+					// GL13.GL_COMPRESSED_RGBA, // internal format for texture
+					// is compressed RGB with Alpha
+					w, h, // size of texture image
+					0, // no border
+					openGLtype, // incoming pixel format: 4 bytes in RGBA
+					// order
+					GL11.GL_UNSIGNED_BYTE, // incoming pixel data type: unsigned
+					// bytes
+					 (IntBuffer)null); // with nullptr
+
+		else
+			GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, // level of detail
+					GL11.GL_RGBA8, // internal format for texture is RGB with
+					// Alpha
+					// GL13.GL_COMPRESSED_RGBA, // internal format for texture
+					// is compressed RGB with Alpha
+					w, h, // size of texture image
+					0, // no border
+					openGLtype, // incoming pixel format: 4 bytes in RGBA
+					// order
+					GL11.GL_UNSIGNED_BYTE, // incoming pixel data type: unsigned
+					// bytes
+					pixels); // incoming pixels
 
 		// restore previous texture settings
 		GL11.glPopAttrib();
@@ -196,24 +211,23 @@ public class Texture implements IDisposeable {
 			return GL11.GL_RGB;
 		}
 	}
+
 	/**
-	 * Implement finalizer to detect textures not disposed.
-	 * In case a texture is finalized without beind disposed an error log
-	 * is written to stderr.
+	 * Implement finalizer to detect textures not disposed. In case a texture is
+	 * finalized without beind disposed an error log is written to stderr.
 	 * 
-	 * The texture can not be disposed in the finalizer method because
-	 * the OpenGL resource must be freed on the OpenGL thread.
-	 * Calling dispose here would raise a threading exception in
-	 * OpenGL.
+	 * The texture can not be disposed in the finalizer method because the
+	 * OpenGL resource must be freed on the OpenGL thread. Calling dispose here
+	 * would raise a threading exception in OpenGL.
 	 */
 	@Override
 	protected void finalize() throws Throwable {
-		if(!disposed)
-		{
+		if (!disposed) {
 			LOG.error("Texture not disposed before garbage collected!");
 		}
 		super.finalize();
 	}
+
 	/**
 	 * Allocate a texture (glGenTextures) and return the handle to it.
 	 */
@@ -242,7 +256,9 @@ public class Texture implements IDisposeable {
 	public void drawTextureOnRectangle(TargetRectangle rectangle) {
 		drawTextureOnRectangle(rectangle, true);
 	}
-	private Vector4f color=new Vector4f(1,1,1,1);
+
+	private Vector4f color = new Vector4f(1, 1, 1, 1);
+
 	public Vector4f getColor() {
 		return color;
 	}
@@ -256,17 +272,17 @@ public class Texture implements IDisposeable {
 	 */
 	public void setColor(RGBAColor color) {
 		float[] c = color.toFloatVector();
-		this.color = new Vector4f(c[0],c[1],c[2],c[3]);
+		this.color = new Vector4f(c[0], c[1], c[2], c[3]);
 	}
 
 	/**
 	 * Render the ractangle using its self settings of color and blendfunc.
+	 * 
 	 * @param rglContext
 	 * @param targetRectangle
 	 * @param sourceRectangle
 	 */
-	public void drawTextureOnRectangle(RGlContext rglContext,
-			TargetRectangle targetRectangle,
+	public void drawTextureOnRectangle(RGlContext rglContext, TargetRectangle targetRectangle,
 			TargetRectangle sourceRectangle) {
 		float maxU = sourceRectangle.getBottomRight().getX();
 		float maxV = sourceRectangle.getTopLeft().getY();
@@ -280,14 +296,15 @@ public class Texture implements IDisposeable {
 		// draw a textured quad
 		drawTextureOnRectangle(targetRectangle, maxU, maxV, minU, minV);
 	}
+
 	/**
 	 * Render the ractangle using its self settings of color and blendfunc.
+	 * 
 	 * @param rglContext
 	 * @param targetRectangle
 	 * @param sourceRectangle
 	 */
-	public void drawTextureOnRectangle(RGlContext rglContext,
-			TargetRectangle2d targetRectangle,
+	public void drawTextureOnRectangle(RGlContext rglContext, TargetRectangle2d targetRectangle,
 			TargetRectangle2d sourceRectangle) {
 		float maxU = sourceRectangle.right;
 		float maxV = sourceRectangle.y;
@@ -304,32 +321,24 @@ public class Texture implements IDisposeable {
 		UtilGl.setColor(color);
 		// activate the image texture
 		bindThisTexture();
-		if(samplingNear)
-		{
+		if (samplingNear) {
 			setNearestSampling(samplingNear);
 		}
 		// draw a textured quad
 		drawTextureOnRectangle(targetRectangle, maxU, maxV, minU, minV);
-		if(samplingNear)
-		{
+		if (samplingNear) {
 			setNearestSampling(false);
 		}
 		rglContext.pop();
 	}
 
 	private void setNearestSampling(boolean samplingNear) {
-		if(samplingNear)
-		{
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER,
-					GL11.GL_NEAREST);
-				GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER,
-					GL11.GL_NEAREST);
-		}else
-		{
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER,
-				GL11.GL_LINEAR);
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER,
-				GL11.GL_LINEAR);
+		if (samplingNear) {
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+		} else {
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
 		}
 	}
 
@@ -343,9 +352,8 @@ public class Texture implements IDisposeable {
 	 * @param blendFunc
 	 *            the blend function to use with alpha blending
 	 */
-	public void drawTextureOnRectangle(RGlContext rglContext,
-			TargetRectangle targetRectangle, TargetRectangle sourceRectangle,
-			EBlendFunc blendFunc) {
+	public void drawTextureOnRectangle(RGlContext rglContext, TargetRectangle targetRectangle,
+			TargetRectangle sourceRectangle, EBlendFunc blendFunc) {
 		float maxU = sourceRectangle.getBottomRight().getX();
 		float maxV = sourceRectangle.getTopLeft().getY();
 		float minU = sourceRectangle.getTopLeft().getX();
@@ -365,9 +373,9 @@ public class Texture implements IDisposeable {
 		drawTextureOnRectangle(targetRectangle, maxU, maxV, minU, minV);
 		rglContext.pop();
 	}
-	public void drawTextureOnRectangle(RGlContext rglContext,
-			TargetRectangle2d targetRectangle, TargetRectangle2d sourceRectangle,
-			EBlendFunc blendFunc) {
+
+	public void drawTextureOnRectangle(RGlContext rglContext, TargetRectangle2d targetRectangle,
+			TargetRectangle2d sourceRectangle, EBlendFunc blendFunc) {
 		float maxU = sourceRectangle.right;
 		float maxV = sourceRectangle.y;
 		float minU = sourceRectangle.x;
@@ -387,19 +395,17 @@ public class Texture implements IDisposeable {
 		drawTextureOnRectangle(targetRectangle, maxU, maxV, minU, minV);
 		rglContext.pop();
 	}
-	
+
 	/**
-	 * Disable all texture selection - select texture id 0 instead of real textures before drawing.
-	 * Use only for performance measurement purpose.
+	 * Disable all texture selection - select texture id 0 instead of real
+	 * textures before drawing. Use only for performance measurement purpose.
 	 */
 	public static boolean disableAllTextures;
-	
+
 	private void bindThisTexture() {
-		if(disableAllTextures)
-		{
+		if (disableAllTextures) {
 			GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
-		}else
-		{
+		} else {
 			GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureHandle);
 		}
 	}
@@ -413,11 +419,12 @@ public class Texture implements IDisposeable {
 	 *            the part of the image to render on the target rectangle
 	 * @param blendFunc
 	 *            the blend function to use with alpha blending
-	 * @param colors colors of the points: topLeft, topRight, bottomLeft, bottomRight
+	 * @param colors
+	 *            colors of the points: topLeft, topRight, bottomLeft,
+	 *            bottomRight
 	 */
-	public void drawTextureOnRectangle(RGlContext rglContext,
-			TargetRectangle targetRectangle, TargetRectangle sourceRectangle,
-			EBlendFunc blendFunc, Vector4f[] colors) {
+	public void drawTextureOnRectangle(RGlContext rglContext, TargetRectangle targetRectangle,
+			TargetRectangle sourceRectangle, EBlendFunc blendFunc, Vector4f[] colors) {
 		float maxU = sourceRectangle.getBottomRight().getX();
 		float maxV = sourceRectangle.getTopLeft().getY();
 		float minU = sourceRectangle.getTopLeft().getX();
@@ -436,9 +443,9 @@ public class Texture implements IDisposeable {
 		drawTextureOnRectangle(targetRectangle, maxU, maxV, minU, minV, colors);
 		rglContext.pop();
 	}
-	public void drawTextureOnRectangle(RGlContext rglContext,
-			TargetRectangle2d targetRectangle, TargetRectangle2d sourceRectangle,
-			EBlendFunc blendFunc, Vector4f[] colors) {
+
+	public void drawTextureOnRectangle(RGlContext rglContext, TargetRectangle2d targetRectangle,
+			TargetRectangle2d sourceRectangle, EBlendFunc blendFunc, Vector4f[] colors) {
 		float maxU = sourceRectangle.right;
 		float maxV = sourceRectangle.y;
 		float minU = sourceRectangle.x;
@@ -459,11 +466,10 @@ public class Texture implements IDisposeable {
 	}
 
 	public void drawTextureOnRectangle(TargetRectangle rectangle, boolean blend) {
-		drawTextureOnRectangle(rectangle, blend, new Vector4f(1,1,1,1));
+		drawTextureOnRectangle(rectangle, blend, new Vector4f(1, 1, 1, 1));
 	}
 
-	public void drawTextureOnRectangle(TargetRectangle rectangle, boolean blend,
-			Vector4f color) {
+	public void drawTextureOnRectangle(TargetRectangle rectangle, boolean blend, Vector4f color) {
 		float maxU = 1.0f;
 		float maxV = 0.0f;
 		float minU = 0.0f;
@@ -486,7 +492,8 @@ public class Texture implements IDisposeable {
 	}
 
 	/**
-	 * Renders the texture onto a specified surface ( {@link ITessellatedSurface} ).
+	 * Renders the texture onto a specified surface (
+	 * {@link ITessellatedSurface} ).
 	 * 
 	 * @param blend
 	 * @param color
@@ -496,16 +503,13 @@ public class Texture implements IDisposeable {
 	 * @param minV
 	 * @param surface
 	 */
-	public void drawTextureOnSurface(boolean blend,
-			Vector4f color,float maxU,
-	float maxV ,
-	float minU ,
-	float minV ,ITessellatedSurface surface) {
-		
+	public void drawTextureOnSurface(boolean blend, Vector4f color, float maxU, float maxV, float minU, float minV,
+			ITessellatedSurface surface) {
+
 		GL11.glEnable(GL11.GL_TEXTURE_2D); // be sure textures are on
 		UtilGl.setColor(color);
 		GL11.glDisable(GL11.GL_LIGHTING); // no lighting
-		//GL11.glDisable(GL11.GL_DEPTH_TEST); // no depth test
+		// GL11.glDisable(GL11.GL_DEPTH_TEST); // no depth test
 		if (blend) {
 			GL11.glEnable(GL11.GL_BLEND); // enable transparency
 			GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
@@ -514,38 +518,38 @@ public class Texture implements IDisposeable {
 		}
 		// activate the image texture
 		bindThisTexture();
-	
-		
+
 		int nrOfStepU = surface.getTesselU();
 		int nrOfStepV = surface.getTesselV();
-		
+
 		GL11.glBegin(GL11.GL_QUADS);
-		for (int i = 0;i < nrOfStepU;i++ ){
-			float u0 = (float)i / (float) nrOfStepU;
-			float u1 = (float)(i+1) / (float) nrOfStepU;
-			for (int j =0; j <nrOfStepV ; j++){
-				float v0 = (float)j / (float) nrOfStepV;
-				float v1 = (float)(j+1) / (float) nrOfStepV;
-				
-				Vector3f p = surface.getPointAt (u0,v0);
+		for (int i = 0; i < nrOfStepU; i++) {
+			float u0 = (float) i / (float) nrOfStepU;
+			float u1 = (float) (i + 1) / (float) nrOfStepU;
+			for (int j = 0; j < nrOfStepV; j++) {
+				float v0 = (float) j / (float) nrOfStepV;
+				float v1 = (float) (j + 1) / (float) nrOfStepV;
+
+				Vector3f p = surface.getPointAt(u0, v0);
 				GL11.glTexCoord2f(u0, v0);
-				GL11.glVertex3f(p.x,p.y,p.z );
-				
-				p = surface.getPointAt (u0,v1);
+				GL11.glVertex3f(p.x, p.y, p.z);
+
+				p = surface.getPointAt(u0, v1);
 				GL11.glTexCoord2f(u0, v1);
-				GL11.glVertex3f(p.x,p.y,p.z );
-				 
+				GL11.glVertex3f(p.x, p.y, p.z);
+
 				GL11.glTexCoord2f(u1, v1);
-				p = surface.getPointAt (u1,v1);
-				GL11.glVertex3f(p.x,p.y,p.z );
-				
+				p = surface.getPointAt(u1, v1);
+				GL11.glVertex3f(p.x, p.y, p.z);
+
 				GL11.glTexCoord2f(u1, v0);
-				p = surface.getPointAt (u1,v0);
-				GL11.glVertex3f(p.x,p.y,p.z );
+				p = surface.getPointAt(u1, v0);
+				GL11.glVertex3f(p.x, p.y, p.z);
 			}
 		}
 		GL11.glEnd();
 	}
+
 	private void drawTextureOnRectangle(TargetRectangle rectangle, float maxU, float maxV, float minU, float minV,
 			Vector4f[] colors) {
 		GL11.glBegin(GL11.GL_QUADS);
@@ -568,6 +572,7 @@ public class Texture implements IDisposeable {
 		}
 		GL11.glEnd();
 	}
+
 	private void drawTextureOnRectangle(TargetRectangle2d rectangle, float maxU, float maxV, float minU, float minV,
 			Vector4f[] colors) {
 		GL11.glBegin(GL11.GL_QUADS);
@@ -593,6 +598,7 @@ public class Texture implements IDisposeable {
 
 	/**
 	 * This method does not bind the texture!
+	 * 
 	 * @param rectangle
 	 * @param maxU
 	 * @param maxV
@@ -616,6 +622,7 @@ public class Texture implements IDisposeable {
 		}
 		GL11.glEnd();
 	}
+
 	private void drawTextureOnRectangle(TargetRectangle2d rectangle, float maxU, float maxV, float minU, float minV) {
 		GL11.glBegin(GL11.GL_QUADS);
 		{
@@ -660,17 +667,16 @@ public class Texture implements IDisposeable {
 	public void replaceContent(NativeImage newimage) {
 		replaceContent(newimage, EMipMapType.none, ETextureWrapType.mirroredRepeat, false);
 	}
-	
-	public void replaceContent(NativeImage newimage, EMipMapType mtype, ETextureWrapType wrapType, boolean appleClientStorage) {
-		this.sourceImage=newimage;
-		this.sourceMipmapType=mtype;
-		this.sourceTextureWrapType=wrapType;
-		if(EMipMapType.standard.equals(mtype))
-		{
-			ContextCapabilities cc=GLContext.getCapabilities();
-			if(!cc.OpenGL30&&!cc.GL_EXT_framebuffer_object)
-			{
-				mtype=EMipMapType.none;
+
+	public void replaceContent(NativeImage newimage, EMipMapType mtype, ETextureWrapType wrapType,
+			boolean appleClientStorage) {
+		this.sourceImage = newimage;
+		this.sourceMipmapType = mtype;
+		this.sourceTextureWrapType = wrapType;
+		if (EMipMapType.standard.equals(mtype)) {
+			ContextCapabilities cc = GLContext.getCapabilities();
+			if (!cc.OpenGL30 && !cc.GL_EXT_framebuffer_object) {
+				mtype = EMipMapType.none;
 			}
 		}
 		this.width = newimage.getWidth();
@@ -678,99 +684,85 @@ public class Texture implements IDisposeable {
 		GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureHandle);
 		switch (wrapType) {
 		case clamp:
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S,
-					GL11.GL_CLAMP);
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T,
-					GL11.GL_CLAMP);
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL11.GL_CLAMP);
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL11.GL_CLAMP);
 			break;
 		case clampYrepeatX:
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S,
-					GL11.GL_REPEAT);
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T,
-					GL11.GL_CLAMP);
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL11.GL_REPEAT);
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL11.GL_CLAMP);
 			break;
 		case clampXrepeatY:
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S,
-					GL11.GL_CLAMP);
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T,
-					GL11.GL_REPEAT);
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL11.GL_CLAMP);
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL11.GL_REPEAT);
 			break;
 		case repeat:
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S,
-					GL11.GL_REPEAT);
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T,
-					GL11.GL_REPEAT);
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL11.GL_REPEAT);
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL11.GL_REPEAT);
 			break;
 		case mirroredRepeat:
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S,
-					GL14.GL_MIRRORED_REPEAT);
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T,
-					GL14.GL_MIRRORED_REPEAT);
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL14.GL_MIRRORED_REPEAT);
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL14.GL_MIRRORED_REPEAT);
 			break;
 		default:
 			break;
 		}
 		switch (mtype) {
 		case none:
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER,
-					GL11.GL_LINEAR);
-				GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER,
-					GL11.GL_LINEAR);
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
 			break;
 		case standard:
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER,
-					GL11.GL_LINEAR);
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER,
-					GL11.GL_LINEAR_MIPMAP_LINEAR);
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR_MIPMAP_LINEAR);
 			break;
 		default:
-			throw new RuntimeException("mipmapping type is not implemented: "+mtype);
+			throw new RuntimeException("mipmapping type is not implemented: " + mtype);
 		}
-		int alignment=newimage.getAlignment();
+		int alignment = newimage.getAlignment();
 		GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT, alignment);
 		int pixel_format;
 		int dataformat;
-		pixel_format=componentOrderToOGL(newimage.getComponentOrder());
-		int internal_format=componentOrderTOIntarnalFormat(newimage.getComponentOrder());
-		boolean undoClientStorage=false;
-		if(appleClientStorage)
-		{
-			ContextCapabilities cc=GLContext.getCapabilities();
-			if(cc.GL_APPLE_client_storage)
-			{
+		pixel_format = componentOrderToOGL(newimage.getComponentOrder());
+		int internal_format = componentOrderTOIntarnalFormat(newimage.getComponentOrder());
+		boolean undoClientStorage = false;
+		if (appleClientStorage) {
+			ContextCapabilities cc = GLContext.getCapabilities();
+			if (cc.GL_APPLE_client_storage) {
 				GL11.glPixelStorei(APPLEClientStorage.GL_UNPACK_CLIENT_STORAGE_APPLE, GL11.GL_TRUE);
-				undoClientStorage=true;
+				undoClientStorage = true;
 			}
 		}
 		dataformat = GL11.GL_UNSIGNED_BYTE;
-		GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, internal_format, width, height,
-				0, pixel_format, dataformat, newimage.getBuffer().getJavaAccessor());
+		if (pbo)
+			GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, internal_format, width, height, 0, pixel_format, dataformat,
+					(ByteBuffer) null);
+		else
+			GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, internal_format, width, height, 0, pixel_format, dataformat,
+					newimage.getBuffer().getJavaAccessor());
 		switch (mtype) {
 		case standard:
-			// Using GL_GENERATE_MIPMAP instead causes my NVidia to process about 100%
+			// Using GL_GENERATE_MIPMAP instead causes my NVidia to process
+			// about 100%
 			// CPU! Seems to use CPU to generate mipmap levels
-			if(GLContext.getCapabilities().OpenGL30)
-			{
+			if (GLContext.getCapabilities().OpenGL30) {
 				GL30.glGenerateMipmap(GL11.GL_TEXTURE_2D);
-			}else
-			{
+			} else {
 				EXTFramebufferObject.glGenerateMipmapEXT(GL11.GL_TEXTURE_2D);
 			}
 			break;
 		case none:
 		default:
-			//nothing to do
+			// nothing to do
 			break;
 		}
 		// Reset the default behaviour
 		GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT, 1);
-		if(undoClientStorage)
-		{
+		if (undoClientStorage) {
 			GL11.glPixelStorei(APPLEClientStorage.GL_UNPACK_CLIENT_STORAGE_APPLE, GL11.GL_FALSE);
 		}
 	}
-	public static int componentOrderToOGL(ENativeImageComponentOrder co)
-	{
+
+	public static int componentOrderToOGL(ENativeImageComponentOrder co) {
 		switch (co) {
 		case RGB:
 			return GL11.GL_RGB;
@@ -787,14 +779,11 @@ public class Texture implements IDisposeable {
 		case ARGB:
 			return GL12.GL_BGRA;
 		default:
-			throw new RuntimeException(
-					"pixel format is unknown to opengl module: "
-							+ co);
+			throw new RuntimeException("pixel format is unknown to opengl module: " + co);
 		}
 	}
 
-	private int componentOrderTOIntarnalFormat(
-			ENativeImageComponentOrder componentOrder) {
+	private int componentOrderTOIntarnalFormat(ENativeImageComponentOrder componentOrder) {
 		switch (componentOrder) {
 		case ARGB:
 		case BGRA:
@@ -808,34 +797,26 @@ public class Texture implements IDisposeable {
 		case MONO:
 			return GL11.GL_LUMINANCE8;
 		default:
-			throw new RuntimeException(
-					"pixel format is unknown to opengl module: "
-							+ componentOrder);
+			throw new RuntimeException("pixel format is unknown to opengl module: " + componentOrder);
 		}
 	}
 
 	/**
-	 * Generate mip-map for an existing texture. It is useful when the texture is rendered shrinked.
+	 * Generate mip-map for an existing texture. It is useful when the texture
+	 * is rendered shrinked.
 	 */
-	public void generateMipMap()
-	{
-		ContextCapabilities cc=GLContext.getCapabilities();
-		if(cc.OpenGL30)
-		{
+	public void generateMipMap() {
+		ContextCapabilities cc = GLContext.getCapabilities();
+		if (cc.OpenGL30) {
 			selectTecture();
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER,
-					GL11.GL_LINEAR);
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER,
-					GL11.GL_LINEAR_MIPMAP_LINEAR);
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR_MIPMAP_LINEAR);
 			GL30.glGenerateMipmap(GL11.GL_TEXTURE_2D);
 			deSelectTecture();
-		}else if(cc.GL_EXT_framebuffer_object)
-		{
+		} else if (cc.GL_EXT_framebuffer_object) {
 			selectTecture();
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER,
-					GL11.GL_LINEAR);
-			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER,
-					GL11.GL_LINEAR_MIPMAP_LINEAR);
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
+			GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR_MIPMAP_LINEAR);
 			GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureHandle);
 			EXTFramebufferObject.glGenerateMipmapEXT(GL11.GL_TEXTURE_2D);
 			deSelectTecture();
@@ -848,16 +829,14 @@ public class Texture implements IDisposeable {
 	}
 
 	public void applyBlendFunc(ENativeImageAlphaStorageFormat alphaFormat) {
-		if(ENativeImageAlphaStorageFormat.premultiplied.equals(alphaFormat))
-		{
+		if (ENativeImageAlphaStorageFormat.premultiplied.equals(alphaFormat)) {
 			setBlendFunc(EBlendFunc.ALPHA_PREMULTIPLIED);
-		}else
-		{
+		} else {
 			setBlendFunc(EBlendFunc.SRC_ALPHA__ONE_MINUS_SRC_ALPHA);
-		}		
+		}
 	}
 
 	public void setSamplingNear(boolean samplingNear) {
-		this.samplingNear=samplingNear;
+		this.samplingNear = samplingNear;
 	}
 }
