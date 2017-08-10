@@ -127,6 +127,10 @@ public class ImageLoadTest {
 			a.cacheEmpty();
 			// Test TIFF
 			a.tiffLoad(img.getKey(),8);
+			a.cacheEmpty();
+			// Test RLE
+			a.testRLE(img.getKey(),9);
+			a.cacheEmpty();
 			System.out.println("Tests ends for file: "+n);
 
 			// ending the line
@@ -194,7 +198,7 @@ public class ImageLoadTest {
 	public void initCSV(String path) {
 //		resultsCSV = new File(path + "results.csv");
 		resultsCSV = new File("/tmp/results.csv");
-		int noOfTests = 8;
+		int noOfTests = 9;
 		try {
 			pw = new PrintWriter(resultsCSV);
 			sb = new StringBuilder();
@@ -582,6 +586,55 @@ public class ImageLoadTest {
 		String n=url.toString();
 		n.substring(n.length()-10);
 		System.out.println("Test:"+ testnumber+ "File: "+n+ "Time (ns):"+format(elapsed));
+	}
+	
+	public void testRLE(URL url, int testnumber){
+		String pathname = url.toString();
+		pathname = pathname.replaceAll(".png", "");
+
+//		if (squash) {
+//			String squashFolder = pathname.contains("tsm") ? "/tsm" : "/treat";
+//			String squashPathname = (ramdisk ? SQUASHRAM : SQUASHMOUNT) + squashFolder + "/"
+//					+ pathname.substring(pathname.length() - 6) + ".qimg";
+//
+//			long end;
+//			try {
+//				long start = System.nanoTime();
+//				NativeImage ni = UtilNativeImageIo.loadImageFromFile(new File(squashPathname));
+//				end = System.nanoTime();
+//				sb.append(format(end - start));
+//				sb.append(",");
+//				log(testnumber, url, end - start);
+//			} catch (IOException e) {
+//				// TODO Auto-generated catch block
+//				e.printStackTrace();
+//			}
+//		}
+//		if (!squash) {
+			String folder = pathname.contains("tsm") ? TSM : TREAT;
+			pathname = folder + "/" + pathname.substring(pathname.length() - 6) + ".qimg";
+			try {
+				long end;
+				NativeImage ni = UtilNativeImageIo.loadImageFromFile(new File(pathname));
+				File temporary= new File("/tmp/temp.rle");
+				//encode the file
+				UtilNativeImageIo.RLEencoderNativeIMage2File(ni, temporary);
+				//decode the file
+				long start = System.nanoTime();
+				NativeImage nidecoded=UtilNativeImageIo.RLEdecoderFile2NativeImage(temporary);
+				// UtilNativeImageIo.wrapImageFromMemory(UtilFile.loadAsByteBuffer(new
+				// File(pathname), all));
+				end = System.nanoTime();
+				sb.append(format(end - start));
+				sb.append(",");
+				log(testnumber, url, end - start);
+
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+//		}
+		
 	}
 }
 

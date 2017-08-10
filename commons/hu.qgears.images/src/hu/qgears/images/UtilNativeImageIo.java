@@ -6,6 +6,7 @@ import hu.qgears.commons.mem.INativeMemory;
 import hu.qgears.commons.mem.INativeMemoryAllocator;
 import hu.qgears.commons.mem.WrappedJavaNativeMemory;
 import hu.qgears.images.libpng.NativeLibPng;
+import hu.qgears.images.tests.CustomRLE;
 import hu.qgears.images.tiff.NativeTiffLoader;
 
 import java.io.File;
@@ -29,11 +30,40 @@ public class UtilNativeImageIo {
 	/**
 	 * The header size of the custom QIMG image format.
 	 */
+	private static CustomRLE rle=CustomRLE.getInstance();
 	private static int headerSize=24;
 	
 	private UtilNativeImageIo() {
 		// disable constructor of utility class
 	}
+	
+	static public NativeImage RLEdecoderFile2NativeImage(File inputFile){
+		try {
+			return rle.decoderFile2NativeImage(inputFile);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			return null;
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			return null;
+
+		}
+	}
+	
+	public static void RLEencoderNativeIMage2File(NativeImage ni, File file){
+		try {
+			rle.encoderNativeIMage2File(ni, file);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	
 	
 	/**
 	 * Returns the size, that is required to save specified
