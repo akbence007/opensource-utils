@@ -66,6 +66,9 @@ public class UtilNativeImageIo {
 		imageToNativeBytes(im, bb);
 		return ret;
 	}
+	
+	
+	
 
 	/**
 	 * Returns <code>true</code> if and only if the specified QIMG image content
