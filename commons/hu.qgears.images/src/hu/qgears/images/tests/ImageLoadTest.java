@@ -622,6 +622,7 @@ public class ImageLoadTest {
 				//decode the file
 				long start = System.nanoTime();
 				NativeImage nidecoded=UtilNativeImageIo.RLEdecoderFile2NativeImage(temporary);
+				temporary.delete();
 				// UtilNativeImageIo.wrapImageFromMemory(UtilFile.loadAsByteBuffer(new
 				// File(pathname), all));
 				end = System.nanoTime();
